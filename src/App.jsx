@@ -92,49 +92,58 @@ function App() {
   }
 
   const generatePairings = () => {
-    const shuffledParticipants = [...participants]
+    const names = participants.map(p => p.name)
     let attempts = 0
     const maxAttempts = 100
 
     while (attempts < maxAttempts) {
-      // Fisher-Yates shuffle
-      for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledParticipants[i], shuffledParticipants[j]] = 
-        [shuffledParticipants[j], shuffledParticipants[i]]
-      }
+      attempts++
+      
+      // Create arrays for givers and receivers
+      let availableGivers = [...participants]
+      let availableReceivers = [...participants]
+      let matches = []
+      let success = true
 
-      // Check if pairings are valid
-      let isValid = true
-      for (let i = 0; i < shuffledParticipants.length; i++) {
-        const nextIndex = (i + 1) % shuffledParticipants.length
-        const giver = shuffledParticipants[i]
-        const receiver = shuffledParticipants[nextIndex]
+      // Try to match each giver with a receiver
+      for (const giver of participants) {
+        // Remove giver from available receivers
+        availableReceivers = availableReceivers.filter(p => p.id !== giver.id)
         
-        // Check if person is assigned to themselves or if pairing is blocked
-        if (giver.id === receiver.id || isPairingBlocked(giver.name, receiver.name)) {
-          isValid = false
+        // Filter out blocked matches
+        const possibleReceivers = availableReceivers.filter(receiver => 
+          !isPairingBlocked(giver.name, receiver.name)
+        )
+
+        // Check if there are any possible receivers
+        if (possibleReceivers.length === 0) {
+          success = false
           break
         }
+
+        // Randomly select a receiver
+        const randomIndex = Math.floor(Math.random() * possibleReceivers.length)
+        const receiver = possibleReceivers[randomIndex]
+
+        // Add the match
+        matches.push({
+          giver: giver.name,
+          giverId: giver.id,
+          receiver: receiver.name,
+          secretKey: generateHexId()
+        })
+
+        // Remove the selected receiver from available receivers
+        availableReceivers = availableReceivers.filter(p => p.id !== receiver.id)
       }
 
-      if (isValid) {
-        const newPairings = shuffledParticipants.map((participant, index) => {
-          const nextIndex = (index + 1) % shuffledParticipants.length
-          return {
-            giver: participant.name,
-            giverId: participant.id,
-            receiver: shuffledParticipants[nextIndex].name,
-            secretKey: generateHexId()
-          }
-        })
-        storePairings(newPairings)
+      // If we successfully matched everyone, store the pairings and exit
+      if (success) {
+        storePairings(matches)
         setRevealedPairings({})
         setIsPairingGenerated(true)
         return
       }
-
-      attempts++
     }
 
     alert('Failed to generate valid pairings. You may have too many blocked combinations.')
