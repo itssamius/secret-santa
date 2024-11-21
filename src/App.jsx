@@ -100,9 +100,11 @@ function App() {
       
       // Start with forced matches
       let matches = []
-      let availableGivers = [...participants]
-      let availableReceivers = [...participants]
       let success = true
+
+      // Create a pool of all participants
+      let remainingGivers = [...participants]
+      let remainingReceivers = [...participants]
 
       // First handle forced matches
       for (const forcedMatch of forcedMatches) {
@@ -121,43 +123,72 @@ function App() {
           secretKey: generateHexId()
         })
 
-        // Remove used participants from available pools
-        availableGivers = availableGivers.filter(p => p.id !== giver.id)
-        availableReceivers = availableReceivers.filter(p => p.id !== receiver.id)
+        // Remove used participants from remaining pools
+        remainingGivers = remainingGivers.filter(p => p.id !== giver.id)
+        remainingReceivers = remainingReceivers.filter(p => p.id !== receiver.id)
       }
 
       if (!success) continue
 
-      // Then handle remaining participants
-      for (const giver of availableGivers) {
-        // Get possible receivers (excluding already matched and blocked)
-        const possibleReceivers = availableReceivers.filter(receiver => 
+      // Shuffle the remaining givers array
+      for (let i = remainingGivers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [remainingGivers[i], remainingGivers[j]] = [remainingGivers[j], remainingGivers[i]]
+      }
+
+      // Try to match remaining participants
+      for (const giver of remainingGivers) {
+        // Filter valid receivers (not self, not blocked, not already matched)
+        const validReceivers = remainingReceivers.filter(receiver => 
           receiver.id !== giver.id && 
           !isPairingBlocked(giver.name, receiver.name)
         )
 
-        if (possibleReceivers.length === 0) {
+        if (validReceivers.length === 0) {
           success = false
           break
         }
 
-        // Randomly select a receiver
-        const randomIndex = Math.floor(Math.random() * possibleReceivers.length)
-        const receiver = possibleReceivers[randomIndex]
+        // Shuffle the valid receivers array
+        const shuffledReceivers = [...validReceivers]
+        for (let i = shuffledReceivers.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffledReceivers[i], shuffledReceivers[j]] = [shuffledReceivers[j], shuffledReceivers[i]]
+        }
 
-        matches.push({
-          giver: giver.name,
-          giverId: giver.id,
-          receiver: receiver.name,
-          secretKey: generateHexId()
-        })
+        // Try each possible receiver until we find a valid match
+        let matched = false
+        for (const receiver of shuffledReceivers) {
+          // Check if this receiver is still available
+          if (remainingReceivers.includes(receiver)) {
+            matches.push({
+              giver: giver.name,
+              giverId: giver.id,
+              receiver: receiver.name,
+              secretKey: generateHexId()
+            })
+            
+            // Remove matched receiver from available pool
+            remainingReceivers = remainingReceivers.filter(p => p.id !== receiver.id)
+            matched = true
+            break
+          }
+        }
 
-        // Remove selected receiver from available receivers
-        availableReceivers = availableReceivers.filter(p => p.id !== receiver.id)
+        if (!matched) {
+          success = false
+          break
+        }
       }
 
       // If we successfully matched everyone, store the pairings and exit
-      if (success) {
+      if (success && matches.length === participants.length) {
+        // Additional shuffle of the matches array for extra randomness
+        for (let i = matches.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [matches[i], matches[j]] = [matches[j], matches[i]]
+        }
+        
         storePairings(matches)
         setRevealedPairings({})
         setIsPairingGenerated(true)
