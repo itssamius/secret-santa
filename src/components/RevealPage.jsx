@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 
 function RevealPage() {
   const [loading, setLoading] = useState(true)
   const [revealed, setRevealed] = useState(false)
   const [pairingData, setPairingData] = useState(null)
   const [error, setError] = useState(null)
+  
+  // Use React Router's useParams hook to get URL parameters
+  const { groupName, participantId, secretKey } = useParams()
 
   useEffect(() => {
-    // Get the URL parameters
-    const pathParts = window.location.pathname.split('/')
-    const groupName = decodeURIComponent(pathParts[2])
-    const participantId = pathParts[3]
-    const secretKey = pathParts[4]
-
     // Get the pairings from localStorage
     const storedData = localStorage.getItem('secretSantaPairings')
     if (!storedData) {
@@ -22,7 +20,7 @@ function RevealPage() {
     }
 
     const data = JSON.parse(storedData)
-    if (data.groupName !== groupName) {
+    if (data.groupName !== decodeURIComponent(groupName)) {
       setError('Group not found')
       setLoading(false)
       return
@@ -45,7 +43,7 @@ function RevealPage() {
       receiver: pairing.receiver
     })
     setLoading(false)
-  }, [])
+  }, [groupName, participantId, secretKey])
 
   if (loading) {
     return (
