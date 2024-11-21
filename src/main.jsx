@@ -11,7 +11,7 @@ const router = createBrowserRouter([
     element: <App />,
   },
   {
-    path: "/reveal/:groupName/:participantId/:secretKey",
+    path: "/reveal/:urlId/:groupId/:participantId/:secretKey",
     element: <RevealPage />,
   },
 ]);

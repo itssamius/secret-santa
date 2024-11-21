@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import './App.css'
+import { supabase } from './utils/supabase'
 
 // Function to generate random 16-character hex string
 const generateHexId = () => {
@@ -26,6 +27,9 @@ function App() {
   const [forcedMatches, setForcedMatches] = useState([])
   const [showForcedModal, setShowForcedModal] = useState(false)
   const [selectedForcedPair, setSelectedForcedPair] = useState({ giver: '', receiver: '' })
+  const [groupId, setGroupId] = useState(generateHexId())
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [urlId, setUrlId] = useState(generateHexId())
 
   const addParticipant = () => {
     setParticipants([
@@ -46,14 +50,37 @@ function App() {
     ))
   }
 
-  const storePairings = (newPairings) => {
-    const pairingsData = {
-      groupName,
-      budget,
-      pairings: newPairings
+  const storePairings = async (newPairings) => {
+    setIsSubmitting(true)
+    try {
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 60)
+
+      const { data, error } = await supabase
+        .from('secret_santa_groups')
+        .insert([
+          {
+            id: groupId,
+            url_id: urlId,
+            group_name: groupName,
+            budget: budget,
+            pairings: newPairings,
+            expires_at: expiresAt.toISOString()
+          }
+        ])
+        .select()
+
+      if (error) throw error
+
+      setPairings(newPairings)
+      setRevealedPairings({})
+      setIsPairingGenerated(true)
+    } catch (error) {
+      console.error('Error storing pairings:', error)
+      alert('Failed to save the Secret Santa group. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
-    localStorage.setItem('secretSantaPairings', JSON.stringify(pairingsData))
-    setPairings(newPairings)
   }
 
   const addBlockedPairing = () => {
@@ -216,34 +243,44 @@ function App() {
   }
 
   const copyLinkToClipboard = async (participantId, secretKey) => {
-    const baseUrl = window.location.origin
-    const encodedGroupName = encodeURIComponent(groupName)
-    const link = `${baseUrl}/reveal/${encodedGroupName}/${participantId}/${secretKey}`
-
     try {
-      // Try using the modern clipboard API
+      // Use urlId instead of group name
+      const baseUrl = window.location.origin
+      const path = `/reveal/${urlId}/${groupId}/${participantId}/${secretKey}`
+      
+      // Create full URL
+      const url = new URL(path, baseUrl)
+      const link = url.toString()
+
+      // Try clipboard API first
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(link)
         alert('Link copied to clipboard!')
-      } else {
-        // Fallback method
-        const textArea = document.createElement('textarea')
-        textArea.value = link
-        document.body.appendChild(textArea)
-        textArea.select()
-        
-        try {
-          document.execCommand('copy')
-          alert('Link copied to clipboard!')
-        } catch (err) {
-          alert('Failed to copy link. Please copy this manually:\n\n' + link)
-        } finally {
-          document.body.removeChild(textArea)
-        }
+        return
+      }
+
+      // Fallback to older method
+      const textArea = document.createElement('textarea')
+      textArea.value = link
+      textArea.style.position = 'fixed' // Avoid scrolling to bottom
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+
+      try {
+        document.execCommand('copy')
+        alert('Link copied to clipboard!')
+      } catch (err) {
+        console.error('Fallback: Oops, unable to copy', err)
+        alert('Failed to copy link. Please copy this manually:\n\n' + link)
+      } finally {
+        document.body.removeChild(textArea)
       }
     } catch (err) {
-      // If all methods fail, show the link to manually copy
-      alert('Failed to copy link. Please copy this manually:\n\n' + link)
+      console.error('Copy failed:', err)
+      // Construct a basic fallback URL if URL construction fails
+      const fallbackLink = `${window.location.origin}/reveal/${encodeURIComponent(groupName)}/${groupId}/${participantId}/${secretKey}`
+      alert('Failed to copy link. Please copy this manually:\n\n' + fallbackLink)
     }
   }
 
@@ -391,9 +428,17 @@ function App() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed relative"
             >
-              Generate Secret Santa Pairs
+              {isSubmitting ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="ml-2">Generating...</span>
+                </div>
+              ) : (
+                'Generate Secret Santa Pairs'
+              )}
             </button>
           </form>
         ) : (

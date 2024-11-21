@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
+import { supabase } from '../utils/supabase'
 
 function RevealPage() {
   const [loading, setLoading] = useState(true)
@@ -7,43 +8,60 @@ function RevealPage() {
   const [pairingData, setPairingData] = useState(null)
   const [error, setError] = useState(null)
   
-  // Use React Router's useParams hook to get URL parameters
-  const { groupName, participantId, secretKey } = useParams()
+  // Update params to include groupId
+  const { urlId, groupId, participantId, secretKey } = useParams()
 
   useEffect(() => {
-    // Get the pairings from localStorage
-    const storedData = localStorage.getItem('secretSantaPairings')
-    if (!storedData) {
-      setError('No Secret Santa data found')
-      setLoading(false)
-      return
+    const fetchPairing = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('secret_santa_groups')
+          .select('*')
+          .eq('id', groupId)
+          .eq('url_id', urlId)
+          .single()
+
+        if (error) throw error
+
+        if (!data) {
+          setError('Group not found')
+          setLoading(false)
+          return
+        }
+
+        // Check if group has expired
+        if (new Date(data.expires_at) < new Date()) {
+          setError('This Secret Santa group has expired')
+          setLoading(false)
+          return
+        }
+
+        const pairing = data.pairings.find(
+          p => p.giverId === participantId && p.secretKey === secretKey
+        )
+
+        if (!pairing) {
+          setError('Invalid link or pairing not found')
+          setLoading(false)
+          return
+        }
+
+        setPairingData({
+          groupName: data.group_name,
+          budget: data.budget,
+          giver: pairing.giver,
+          receiver: pairing.receiver
+        })
+        setLoading(false)
+      } catch (err) {
+        console.error('Error fetching pairing:', err)
+        setError('Failed to load Secret Santa data')
+        setLoading(false)
+      }
     }
 
-    const data = JSON.parse(storedData)
-    if (data.groupName !== decodeURIComponent(groupName)) {
-      setError('Group not found')
-      setLoading(false)
-      return
-    }
-
-    const pairing = data.pairings.find(
-      p => p.giverId === participantId && p.secretKey === secretKey
-    )
-
-    if (!pairing) {
-      setError('Invalid link or pairing not found')
-      setLoading(false)
-      return
-    }
-
-    setPairingData({
-      groupName: data.groupName,
-      budget: data.budget,
-      giver: pairing.giver,
-      receiver: pairing.receiver
-    })
-    setLoading(false)
-  }, [groupName, participantId, secretKey])
+    fetchPairing()
+  }, [groupId, participantId, secretKey])
 
   if (loading) {
     return (
