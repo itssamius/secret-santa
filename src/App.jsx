@@ -92,30 +92,50 @@ function App() {
   }
 
   const generatePairings = () => {
-    const names = participants.map(p => p.name)
     let attempts = 0
     const maxAttempts = 100
 
     while (attempts < maxAttempts) {
       attempts++
       
-      // Create arrays for givers and receivers
+      // Start with forced matches
+      let matches = []
       let availableGivers = [...participants]
       let availableReceivers = [...participants]
-      let matches = []
       let success = true
 
-      // Try to match each giver with a receiver
-      for (const giver of participants) {
-        // Remove giver from available receivers
-        availableReceivers = availableReceivers.filter(p => p.id !== giver.id)
+      // First handle forced matches
+      for (const forcedMatch of forcedMatches) {
+        const giver = participants.find(p => p.name === forcedMatch.giver)
+        const receiver = participants.find(p => p.name === forcedMatch.receiver)
         
-        // Filter out blocked matches
+        if (!giver || !receiver) {
+          success = false
+          break
+        }
+
+        matches.push({
+          giver: giver.name,
+          giverId: giver.id,
+          receiver: receiver.name,
+          secretKey: generateHexId()
+        })
+
+        // Remove used participants from available pools
+        availableGivers = availableGivers.filter(p => p.id !== giver.id)
+        availableReceivers = availableReceivers.filter(p => p.id !== receiver.id)
+      }
+
+      if (!success) continue
+
+      // Then handle remaining participants
+      for (const giver of availableGivers) {
+        // Get possible receivers (excluding already matched and blocked)
         const possibleReceivers = availableReceivers.filter(receiver => 
+          receiver.id !== giver.id && 
           !isPairingBlocked(giver.name, receiver.name)
         )
 
-        // Check if there are any possible receivers
         if (possibleReceivers.length === 0) {
           success = false
           break
@@ -125,7 +145,6 @@ function App() {
         const randomIndex = Math.floor(Math.random() * possibleReceivers.length)
         const receiver = possibleReceivers[randomIndex]
 
-        // Add the match
         matches.push({
           giver: giver.name,
           giverId: giver.id,
@@ -133,7 +152,7 @@ function App() {
           secretKey: generateHexId()
         })
 
-        // Remove the selected receiver from available receivers
+        // Remove selected receiver from available receivers
         availableReceivers = availableReceivers.filter(p => p.id !== receiver.id)
       }
 
