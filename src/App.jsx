@@ -184,12 +184,36 @@ function App() {
     }))
   }
 
-  const copyLinkToClipboard = (participantId, secretKey) => {
+  const copyLinkToClipboard = async (participantId, secretKey) => {
     const baseUrl = window.location.origin
     const encodedGroupName = encodeURIComponent(groupName)
     const link = `${baseUrl}/reveal/${encodedGroupName}/${participantId}/${secretKey}`
-    navigator.clipboard.writeText(link)
-    alert('Link copied to clipboard!')
+
+    try {
+      // Try using the modern clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(link)
+        alert('Link copied to clipboard!')
+      } else {
+        // Fallback method
+        const textArea = document.createElement('textarea')
+        textArea.value = link
+        document.body.appendChild(textArea)
+        textArea.select()
+        
+        try {
+          document.execCommand('copy')
+          alert('Link copied to clipboard!')
+        } catch (err) {
+          alert('Failed to copy link. Please copy this manually:\n\n' + link)
+        } finally {
+          document.body.removeChild(textArea)
+        }
+      }
+    } catch (err) {
+      // If all methods fail, show the link to manually copy
+      alert('Failed to copy link. Please copy this manually:\n\n' + link)
+    }
   }
 
   return (
